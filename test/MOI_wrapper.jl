@@ -308,6 +308,17 @@ function test_supports_ConstraintDualStart_VariableIndex()
     return
 end
 
+function test_scalar_nonlinear_function_is_valid()
+    model = Ipopt.Optimizer()
+    x = MOI.add_variable(model)
+    F, S = MOI.ScalarNonlinearFunction{Float64}, MOI.EqualTo{Float64}
+    @test MOI.is_valid(model, MOI.ConstraintIndex{F,S}(1)) == false
+    c = MOI.add_constraint(model, f, MOI.EqualTo(0.0))
+    @test c isa MOI.ConstraintIndex{F,S}
+    @test MOI.is_valid(model, c) == true
+    return
+end
+
 end  # module TestMOIWrapper
 
 TestMOIWrapper.runtests()

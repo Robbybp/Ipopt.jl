@@ -28,7 +28,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     nlp_dual_start::Union{Nothing,Vector{Float64}}
 
     qp_data::QPBlockData{Float64}
-
+    nlp_model::Union{Nothing,MOI.Nonlinear.Model}
     callback::Union{Nothing,Function}
 
     function Optimizer()
@@ -48,6 +48,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
             nothing,
             QPBlockData{Float64}(),
             nothing,
+            nothing,
         )
     end
 end
@@ -58,6 +59,7 @@ const _SETS =
 const _FUNCTIONS = Union{
     MOI.ScalarAffineFunction{Float64},
     MOI.ScalarQuadraticFunction{Float64},
+    MOI.ScalarNonlinearFunction{Float64},
 }
 
 MOI.get(::Optimizer, ::MOI.SolverVersion) = "3.14.4"
@@ -84,6 +86,7 @@ function MOI.empty!(model::Optimizer)
     empty!(model.mult_x_U)
     model.nlp_data = MOI.NLPBlockData([], _EmptyNLPEvaluator(), false)
     model.nlp_dual_start = nothing
+    model.nlp_model = nothing
     model.qp_data = QPBlockData{Float64}()
     model.callback = nothing
     return
@@ -323,6 +326,45 @@ function MOI.set(
     return
 end
 
+### ScalarNonlinearFunction
+
+function MOI.is_valid(
+    model::Optimizer,
+    ci::MOI.ConstraintIndex{MOI.ScalarNonlinearFunction{Float64},<:_SETS},
+)
+    if model.nlp_model === nothing
+        return false
+    end
+    index = MOI.Nonlinear.ConstraintIndex(ci.value)
+    return MOI.is_valid(model.nlp_model, index)
+end
+
+function MOI.add_constraint(
+    model::Optimizer,
+    f::MOI.ScalarNonlinearFunction{Float64},
+    s::_SETS,
+)
+    if model.nlp_model === nothing
+        model.nlp_model = MOI.Nonlinear.Model()
+    end
+    index = MOI.Nonlinear.add_constraint(model.nlp_model, f, s)
+    model.inner = nothing
+    return MOI.ConstraintIndex{typeof(f),typeof(s)}(index.value)
+end
+
+function MOI.set(
+    model::Optimizer,
+    attr::MOI.ObjectiveFunction{F},
+    func::F,
+) where {F<:MOI.ScalarNonlinearFunction{Float64}}
+    if model.nlp_model === nothing
+        model.nlp_model = MOI.Nonlinear.Model()
+    end
+    MOI.Nonlinear.set_objective(model.nlp_model, func)
+    model.inner = nothing
+    return
+end
+
 ### MOI.VariablePrimalStart
 
 function MOI.supports(
@@ -499,6 +541,9 @@ function MOI.set(
     func::F,
 ) where {F<:Union{MOI.VariableIndex,<:_FUNCTIONS}}
     MOI.set(model.qp_data, attr, func)
+    if model.nlp_model !== nothing
+        MOI.Nonlinear.set_objective(model.nlp_model, nothing)
+    end
     model.inner = nothing
     return
 end
@@ -577,6 +622,12 @@ end
 ### MOI.optimize!
 
 function _setup_model(model::Optimizer)
+    if model.nlp_model !== nothing
+        vars = MOI.get(model, MOI.ListOfVariableIndices())
+        backend = MOI.Nonlinear.SparseReverseMode()
+        evaluator = MOI.Nonlinear.Evaluator(model.nlp_model, backend, vars)
+        model.nlp_data = MOI.NLPBlockData(evaluator)
+    end
     num_quadratic_constraints = length(model.qp_data.hessian_structure) > 0
     num_nlp_constraints = length(model.nlp_data.constraint_bounds)
     has_hessian = :Hess in MOI.features_available(model.nlp_data.evaluator)
