@@ -365,6 +365,22 @@ function MOI.set(
     return
 end
 
+### UserDefinedFunction
+
+MOI.supports(model::Optimizer, ::MOI.UserDefinedFunction) = true
+
+function MOI.set(
+    model::Optimizer,
+    attr::MOI.UserDefinedFunction,
+    args,
+)
+    if model.nlp_model === nothing
+        model.nlp_model = MOI.Nonlinear.Model()
+    end
+    MOI.Nonlinear.register_operator(model.nlp_model, attr.name, attr.N, args...)
+    return
+end
+
 ### MOI.VariablePrimalStart
 
 function MOI.supports(

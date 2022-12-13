@@ -313,6 +313,7 @@ function test_scalar_nonlinear_function_is_valid()
     x = MOI.add_variable(model)
     F, S = MOI.ScalarNonlinearFunction{Float64}, MOI.EqualTo{Float64}
     @test MOI.is_valid(model, MOI.ConstraintIndex{F,S}(1)) == false
+    f = MOI.ScalarNonlinearFunction{Float64}(:sin, Any[x])
     c = MOI.add_constraint(model, f, MOI.EqualTo(0.0))
     @test c isa MOI.ConstraintIndex{F,S}
     @test MOI.is_valid(model, c) == true
