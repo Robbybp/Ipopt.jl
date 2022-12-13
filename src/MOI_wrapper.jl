@@ -369,11 +369,7 @@ end
 
 MOI.supports(model::Optimizer, ::MOI.UserDefinedFunction) = true
 
-function MOI.set(
-    model::Optimizer,
-    attr::MOI.UserDefinedFunction,
-    args,
-)
+function MOI.set(model::Optimizer, attr::MOI.UserDefinedFunction, args)
     if model.nlp_model === nothing
         model.nlp_model = MOI.Nonlinear.Model()
     end
