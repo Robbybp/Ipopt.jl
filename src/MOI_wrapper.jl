@@ -373,7 +373,12 @@ function MOI.set(model::Optimizer, attr::MOI.UserDefinedFunction, args)
     if model.nlp_model === nothing
         model.nlp_model = MOI.Nonlinear.Model()
     end
-    MOI.Nonlinear.register_operator(model.nlp_model, attr.name, attr.N, args...)
+    MOI.Nonlinear.register_operator(
+        model.nlp_model,
+        attr.name,
+        attr.arity,
+        args...,
+    )
     return
 end
 
